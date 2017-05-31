@@ -1,5 +1,7 @@
-﻿#Script version 3.0
-#last Edit Date 12/014/2016
+# Script version 3.0
+# Last Edit Date 12/014/2016
+# Source: https://github.com/hematic/Server-OS-Drive-Cleanup-Script/blob/master/OS%20Drive%20Cleanup.ps1
+
 
 Function Get-Recyclebin{
     [CmdletBinding()]
@@ -11,16 +13,16 @@ Function Get-Recyclebin{
 
     If($ComputerOBJ.PSRemoting -eq $true){
         $Result = Invoke-Command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock {
-        
+
         Try{
             $Shell = New-Object -ComObject Shell.Application
             $Recycler = $Shell.NameSpace(0xa)
-            $Recycler.Items() 
+            $Recycler.Items()
 
             foreach($item in $Recycler.Items())
             {
                 $DeletedDate = $Recycler.GetDetailsOf($item,2) -replace "\u200f|\u200e","" #Invisible Unicode Characters
-                $DeletedDatetime = Get-Date $DeletedDate 
+                $DeletedDatetime = Get-Date $DeletedDate
                 [Int]$DeletedDays = (New-TimeSpan -Start $DeletedDatetime -End $(Get-Date)).Days
 
                 If($DeletedDays -ge $RetentionTime)
@@ -34,14 +36,14 @@ Function Get-Recyclebin{
         }
         Finally{
             If($RecyclerError -eq $False){
-                Write-output $True 
+                Write-output $True
             }
             Else{
                 Write-Output $False
             }
         }
 
-        
+
     } -Credential $ComputerOBJ.Credential
         If($Result -eq $True){
             Write-Host "All recycler items older than $RetentionTime days were deleted" -ForegroundColor Green
@@ -54,12 +56,12 @@ Function Get-Recyclebin{
         Try{
             $Shell = New-Object -ComObject Shell.Application
             $Recycler = $Shell.NameSpace(0xa)
-            $Recycler.Items() 
+            $Recycler.Items()
 
             foreach($item in $Recycler.Items())
             {
                 $DeletedDate = $Recycler.GetDetailsOf($item,2) -replace "\u200f|\u200e","" #Invisible Unicode Characters
-                $DeletedDatetime = Get-Date $DeletedDate 
+                $DeletedDatetime = Get-Date $DeletedDate
                 [Int]$DeletedDays = (New-TimeSpan -Start $DeletedDatetime -End $(Get-Date)).Days
 
                 If($DeletedDays -ge $RetentionTime)
@@ -79,7 +81,7 @@ Function Get-Recyclebin{
                 Write-Host "All recycler items older than $RetentionTime days were deleted" -ForegroundColor Green
             }
         }
-    }    
+    }
 }
 
 Function Clean-Path{
@@ -97,9 +99,10 @@ Function Clean-Path{
             If(Test-Path $Using:Path){
 
                 Foreach($Item in $(Get-ChildItem -Path $Using:Path -Recurse)){
-    
+
                     Try{
-                        Remove-item -Path $item.FullName -Confirm:$False -Recurse -ErrorAction Stop
+                        #Remove-item -Path $item.FullName -Confirm:$False -Recurse -ErrorAction Stop
+                        where { ((get-date)-$_.LastWriteTime).days -gt 60 } | Remove-item -Path $item.FullName -Confirm:$False -Recurse -ErrorAction Stop
                     }
                     Catch [System.Exception]{
                         Write-verbose "$($Item.path) - $($_.Exception.Message)"
@@ -112,11 +115,12 @@ Function Clean-Path{
     Else{
 
         If(Test-Path $Path){
-        
+
         Foreach($Item in $(Get-ChildItem -Path $Path -Recurse)){
-    
+
             Try{
-                Remove-item -Path $item.FullName -Confirm:$False -Recurse -ErrorAction Stop
+                #Remove-item -Path $item.FullName -Confirm:$False -Recurse -ErrorAction Stop
+                where { ((get-date)-$_.LastWriteTime).days -gt 60 } | Remove-item -Path $item.FullName -Confirm:$False -Recurse -ErrorAction Stop
             }
             Catch [System.Exception]{
                 Write-verbose "$($Item.path) - $($_.Exception.Message)"
@@ -143,7 +147,7 @@ Function Get-OrigFreeSpace{
     }
     Catch [System.Exception]{
         $FreeSpaceGB = $False
-        Write-Host "Unable to pull free space from OS drive. Press enter to Exit..." -ForegroundColor Red    
+        Write-Host "Unable to pull free space from OS drive. Press enter to Exit..." -ForegroundColor Red
     }
     Finally{
         $ComputerOBJ | Add-Member -MemberType NoteProperty -Name OrigFreeSpace -Value $FreeSpaceGB
@@ -166,7 +170,7 @@ Function Get-FinalFreeSpace{
 
     Catch [System.Exception]{
         $FreeSpaceGB = $False
-        Write-Host "Unable to pull free space from OS drive. Press enter to Exit..." -ForegroundColor Red    
+        Write-Host "Unable to pull free space from OS drive. Press enter to Exit..." -ForegroundColor Red
     }
     Finally{
         $ComputerOBJ | Add-Member -MemberType NoteProperty -Name FinalFreeSpace -Value $FreeSpaceGB
@@ -179,7 +183,7 @@ Function Get-IISLogPaths{
     Param
     (
         $ComputerOBJ
-    )    
+    )
 
     If($ComputerOBJ.PSRemoting -eq $true){
         $Results = Invoke-command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock {
@@ -228,7 +232,7 @@ Function Get-IISLogPaths{
 
         Write-output $LogInfo
     }
-}  
+}
 
 Function Get-Computername {
 
@@ -276,73 +280,73 @@ Function Test-PSRemoting{
     Write-output $ComputerOBJ
 }
 
-Function TestFor-SymantecPath{
+# Function TestFor-SymantecPath{
 
-    Param
-    (
-        $ComputerOBJ
-    )
-    Write-Host "Attempting to clean old Virus Definitions" -ForegroundColor Yellow
-    If($ComputerOBJ.PSRemoting -eq $true){
-        
-        $Paths = Invoke-command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock {
-                    $VirusDefsPath = Get-ItemProperty "HKLM:\SOFTWARE\Symantec\Symantec Endpoint Protection\CurrentVersion\content" -ErrorAction Stop | select -ExpandProperty VirusDefs
-                    Try{
-                        $Folders = Get-ChildItem -Path $VirusDefsPath -Directory | Where-object {$_.Name -match "([0-9]{8}[.][0-9]{3})"} | Sort-object -Property lastwritetime -Descending
-                    }
-                    Catch [System.Exception]{
-                        $Folders = $null    
-                    }
-                    Write-Output $Folders
-                } -Credential $ComputerOBJ.Credential
-        $PathCount = ($Paths | Measure-Object).count
-        
-        If($PathCount -eq 0){
-            Write-Host "Symantec Definition Directory could not be located. Skipping removal of old definitions." -ForegroundColor Red
-        }
-        ElseIf($PathCount -eq 1){
-            Write-Host "Symantec Definition Directory contained only current definitions." -ForegroundColor Green
-        }
-        Else{
-            Write-Host "Symantec Definition Directory contained $PathCount folders." -ForegroundColor Yellow
-            Invoke-Command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock {
-            
-                [Int]$i = 1
-                Foreach($Folder in $Using:Paths){
-                    If($i -gt 1){
-                        Clean-Path -Path $Folder.fullname -ComputerOBJ $Using:ComputerOBJ
-                    }
-                    $i++
-                }
-            
-            } -Credential $ComputerOBJ.Credential
-            Write-host "All Old Virus Definition Files cleaned successfully." -ForegroundColor Green
-        }
-    }
- 
-    Else{
-        $VirusDefsPath = Get-ItemProperty "HKLM:\SOFTWARE\Symantec\Symantec Endpoint Protection\CurrentVersion\content" -ErrorAction Stop | select -ExpandProperty VirusDefs
-        $Paths = Get-ChildItem -Path $VirusDefsPath -Directory | Where-object {$_.Name -match "([0-9]{8}[.][0-9]{3})"} | Sort-object -Property lastwritetime -Descending
-        $PathCount = ($Paths | Measure-Object).count
-        If($PathCount -eq 0){
-            Write-Host "Symantec Definition Directory could not be located. Skipping removal of old definitions." -ForegroundColor Red
-        }
-        ElseIf($PathCount -eq 1){
-            Write-Host "Symantec Definition Directory contained only current definitions." -ForegroundColor Green
-        }
-        Else{
-            Write-Host "Symantec Definition Directory contained $PathCount folders." -ForegroundColor Yellow
-            [Int]$i = 1
-            Foreach($Folder in $Paths){
-                If($i -gt 1){
-                    Clean-Path -Path $Folder.fullname -ComputerOBJ $ComputerOBJ  
-                }
-                $i++
-            }
-            Write-host "All Old Virus Definition Files cleaned successfully." -ForegroundColor Green
-        }
-    }
-}
+    # Param
+    # (
+        # $ComputerOBJ
+    # )
+    # Write-Host "Attempting to clean old Virus Definitions" -ForegroundColor Yellow
+    # If($ComputerOBJ.PSRemoting -eq $true){
+
+        # $Paths = Invoke-command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock {
+                    # $VirusDefsPath = Get-ItemProperty "HKLM:\SOFTWARE\Symantec\Symantec Endpoint Protection\CurrentVersion\content" -ErrorAction Stop | select -ExpandProperty VirusDefs
+                    # Try{
+                        # $Folders = Get-ChildItem -Path $VirusDefsPath -Directory | Where-object {$_.Name -match "([0-9]{8}[.][0-9]{3})"} | Sort-object -Property lastwritetime -Descending
+                    # }
+                    # Catch [System.Exception]{
+                        # $Folders = $null
+                    # }
+                    # Write-Output $Folders
+                # } -Credential $ComputerOBJ.Credential
+        # $PathCount = ($Paths | Measure-Object).count
+
+        # If($PathCount -eq 0){
+            # Write-Host "Symantec Definition Directory could not be located. Skipping removal of old definitions." -ForegroundColor Red
+        # }
+        # ElseIf($PathCount -eq 1){
+            # Write-Host "Symantec Definition Directory contained only current definitions." -ForegroundColor Green
+        # }
+        # Else{
+            # Write-Host "Symantec Definition Directory contained $PathCount folders." -ForegroundColor Yellow
+            # Invoke-Command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock {
+
+                # [Int]$i = 1
+                # Foreach($Folder in $Using:Paths){
+                    # If($i -gt 1){
+                        # Clean-Path -Path $Folder.fullname -ComputerOBJ $Using:ComputerOBJ
+                    # }
+                    # $i++
+                # }
+
+            # } -Credential $ComputerOBJ.Credential
+            # Write-host "All Old Virus Definition Files cleaned successfully." -ForegroundColor Green
+        # }
+    # }
+
+    # Else{
+        # $VirusDefsPath = Get-ItemProperty "HKLM:\SOFTWARE\Symantec\Symantec Endpoint Protection\CurrentVersion\content" -ErrorAction Stop | select -ExpandProperty VirusDefs
+        # $Paths = Get-ChildItem -Path $VirusDefsPath -Directory | Where-object {$_.Name -match "([0-9]{8}[.][0-9]{3})"} | Sort-object -Property lastwritetime -Descending
+        # $PathCount = ($Paths | Measure-Object).count
+        # If($PathCount -eq 0){
+            # Write-Host "Symantec Definition Directory could not be located. Skipping removal of old definitions." -ForegroundColor Red
+        # }
+        # ElseIf($PathCount -eq 1){
+            # Write-Host "Symantec Definition Directory contained only current definitions." -ForegroundColor Green
+        # }
+        # Else{
+            # Write-Host "Symantec Definition Directory contained $PathCount folders." -ForegroundColor Yellow
+            # [Int]$i = 1
+            # Foreach($Folder in $Paths){
+                # If($i -gt 1){
+                    # Clean-Path -Path $Folder.fullname -ComputerOBJ $ComputerOBJ
+                # }
+                # $i++
+            # }
+            # Write-host "All Old Virus Definition Files cleaned successfully." -ForegroundColor Green
+        # }
+    # }
+# }
 
 Function Run-CleanMGR{
 
@@ -478,13 +482,13 @@ Function Process-IISLogs{
                         }
                         Write-output $LogFiles
                     } -Credential $ComputerOBJ.Credential
-                
-                    If ($($LogFiles | Measure-Object).count -gt 0){ 
-                        ForEach ($File in $LogFiles){ 
+
+                    If ($($LogFiles | Measure-Object).count -gt 0){
+                        ForEach ($File in $LogFiles){
                             Delete-IISLogFile -ComputerOBJ $Computerobj -LogFile $File
-                        } 
-                    } 
-                    ELSE{ 
+                        }
+                    }
+                    ELSE{
                         Write-Host "No IIS Log Files Older than 30 days for this site." -ForegroundColor Green
                     }
                 }
@@ -518,12 +522,12 @@ Function Process-IISLogs{
                     Catch [System.Exception]{
                         Write-Host "No Log File directory for this site." -ForegroundColor Red
                     }
-                    If ($($LogFiles | Measure-Object).count -gt 0){ 
-                        ForEach ($File in $LogFiles){ 
+                    If ($($LogFiles | Measure-Object).count -gt 0){
+                        ForEach ($File in $LogFiles){
                             Delete-IISLogFile -ComputerOBJ $Computerobj -LogFile $File
-                        } 
-                    } 
-                    Else{ 
+                        }
+                    }
+                    Else{
                         Write-Host "No IIS Log Files Older than 30 days for this site." -ForegroundColor Green
                     }
                 }
@@ -545,7 +549,7 @@ Function Delete-IISLogFile{
         $LogFile
     )
     If($ComputerOBJ.PSRemoting -eq $true){
-    
+
         Invoke-command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock {
             Get-item $USING:LogFile | Remove-Item
         } -Credential $ComputerOBJ.Credential
@@ -563,10 +567,10 @@ Function Set-WindowsUpdateService{
         $ComputerOBJ
     )
     Write-Host "Deleting files from 'C:\Windows\SoftwareDistribution\'" -ForegroundColor Yellow
-    
+
     If($ComputerOBJ.PSRemoting -eq $true){
         $Result = Invoke-Command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock {
-        
+
             Try{
                 Get-Service -Name wuauserv | Stop-Service -Force -ErrorAction Stop
                 $WUpdateError = $false
@@ -576,9 +580,9 @@ Function Set-WindowsUpdateService{
             }
             Finally{
                 If($WUpdateError -eq $False){
-                    Get-ChildItem "C:\Windows\SoftwareDistribution\*" -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -force -recurse -ErrorAction SilentlyContinue    
+                    Get-ChildItem "C:\Windows\SoftwareDistribution\*" -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -force -recurse -ErrorAction SilentlyContinue
                     Get-Service -Name wuauserv | Start-Service
-                    Write-output $True 
+                    Write-output $True
                 }
                 Else{
                     Get-Service -Name wuauserv | Start-Service
@@ -586,7 +590,7 @@ Function Set-WindowsUpdateService{
                 }
             }
 
-        
+
         } -Credential $ComputerOBJ.Credential
         If($Result -eq $True){
             Write-Host "Files Deleted Successfully" -ForegroundColor Green
@@ -605,7 +609,7 @@ Function Set-WindowsUpdateService{
         }
         Finally{
             If($WUpdateError -eq $False){
-                Get-ChildItem "C:\Windows\SoftwareDistribution\*" -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -force -recurse -ErrorAction SilentlyContinue    
+                Get-ChildItem "C:\Windows\SoftwareDistribution\*" -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -force -recurse -ErrorAction SilentlyContinue
                 Get-Service -Name wuauserv | Start-Service
                 Write-Host "Files Deleted Successfully" -ForegroundColor Green
             }
@@ -622,12 +626,12 @@ Function Get-AllUserProfiles{
 
     Param
     (
-       $ComputerOBJ 
+       $ComputerOBJ
     )
 
     If($ComputerOBJ.PSRemoting -eq $true){
         $Result = Invoke-Command -ComputerName $ComputerOBJ.ComputerName -ScriptBlock {
-        
+
             Try{
                 $Profiles = (get-childitem c:\users -Directory -erroraction Stop).Name
                 $ProfileError = $false
@@ -644,7 +648,7 @@ Function Get-AllUserProfiles{
                 }
             }
 
-        
+
         } -Credential $ComputerOBJ.Credential
         If($Result -eq $False){
             Write-Host "Unable to pull a list of user profile folders." -ForegroundColor Red
@@ -719,7 +723,7 @@ Write-Host "Beginning User Profile Cleanup" -ForegroundColor Yellow
 Get-AllUserProfiles -ComputerOBJ $ComputerOBJ
 Write-Host "All user profiles have been processed" -ForegroundColor Green
 
-TestFor-SymantecPath -ComputerOBJ $ComputerOBJ
+# TestFor-SymantecPath -ComputerOBJ $ComputerOBJ
 Run-CleanMGR -ComputerOBJ $ComputerOBJ
 Run-DISM -ComputerOBJ $ComputerOBJ
 Process-IISLogs -ComputerOBJ $ComputerOBJ
